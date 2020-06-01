@@ -1,22 +1,34 @@
 package com.zhp.websocket.service;
 
+import com.alibaba.fastjson.JSON;
 import com.zhp.websocket.common.callback.MqttRecieveCallback;
+import com.zhp.websocket.common.dto.ReturnData;
+import com.zhp.websocket.common.vo.EncoderClassVo;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.eclipse.paho.client.mqttv3.*;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
+import org.eclipse.paho.client.mqttv3.MqttTopic;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import javax.websocket.EncodeException;
 import javax.websocket.OnClose;
 import javax.websocket.OnError;
 import javax.websocket.OnMessage;
 import javax.websocket.OnOpen;
 import javax.websocket.Session;
+import javax.websocket.server.PathParam;
 import javax.websocket.server.ServerEndpoint;
 import java.io.IOException;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -28,7 +40,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 
 @Component
 @Slf4j
-@ServerEndpoint(value = "/websocket", subprotocols = {"mqtt"})
+@ServerEndpoint(value = "/websocket/{sid}", subprotocols = {"mqtt"}, encoders = {EncoderClassVo.class })
 public class WebSocketServer {
 
     // JUC包的线程安全Set，用来存放每个客户端对应的WebSocketServer对象。
@@ -40,7 +52,11 @@ public class WebSocketServer {
     private Session session;
 
     // 接收sid
-    private String sid = "";
+    private String sid;
+
+    private boolean partake = false;
+
+    private int topicNum;
 
     private static MqttClient mqttClient = null;
     private static MemoryPersistence memoryPersistence = null;
@@ -53,15 +69,27 @@ public class WebSocketServer {
      * @param session
      */
     @OnOpen
-    public void onOpen(Session session){
+    public void onOpen(@PathParam("sid")String sid, Session session){
         this.session = session;
-        this.sid = UUID.randomUUID().toString().replaceAll("-", "");
+        if("mqtt".equals(sid)){
+            this.sid = UUID.randomUUID().toString().replaceAll("-", "");
 
-        init(sid);
+            init(sid);
 
-        webSocketSet.add(this);
+            webSocketSet.add(this);
 
-        sendMessage("Connection has created.");
+            sendMessage("Connection has created.");
+
+            sendToIndex(new ReturnData("websocketNum", webSocketSet.size() - 1));
+            sendAverage();
+            sendActualConnect();
+        }else{
+            this.sid = sid;
+
+            webSocketSet.add(this);
+
+            initIndex();
+        }
     }
 
     /**
@@ -91,8 +119,17 @@ public class WebSocketServer {
                 }
             }
         }
+        if(!"zhp".equals(sid)){
+            cleanTopics(sid);
+
+            sendToIndex(new ReturnData("websocketNum", webSocketSet.size() - 2));
+            sendAverage();
+            sendActualConnect();
+            sendtopics();
+        }
 
         webSocketSet.remove(this);
+
 
         log.info("there is an wsConnect has close.");
     }
@@ -112,17 +149,19 @@ public class WebSocketServer {
     @OnMessage
     public void onMessage(String message){
         log.info("webSocketServer has received a message:{} from {}", message, this.sid);
-        String result = "尊敬的用户你好！";
+        if(!"zhp".equals(sid)){
+            String result = "尊敬的用户你好！";
 
-        String[] split = message.split("[|]");
-        if("subscribe".equals(split[0])){
-            result = subTopic(split[1]);
-        }else if("unsubscribe".equals(split[0])){
-            result = cleanTopic(split[1]);
-        }else if("publish".equals(split[0])){
-            result = publishMessage(split[1], split[2], 2);
+            String[] split = message.split("[|]");
+            if("subscribe".equals(split[0])){
+                result = subTopic(split[1]);
+            }else if("unsubscribe".equals(split[0])){
+                result = cleanTopic(split[1]);
+            }else if("publish".equals(split[0])){
+                result = publishMessage(split[1], split[2], 2);
+            }
+            this.sendMessage(result);
         }
-        this.sendMessage(result);
     }
 
     /**
@@ -135,7 +174,7 @@ public class WebSocketServer {
         mqttConnectOptions.setCleanSession(true);
         //设置连接超时
         mqttConnectOptions.setConnectionTimeout(30);
-        mqttConnectOptions.setKeepAliveInterval(45);
+        mqttConnectOptions.setKeepAliveInterval(24*60*60);
 
         //设置持久化方式
         memoryPersistence = new MemoryPersistence();
@@ -179,6 +218,15 @@ public class WebSocketServer {
                     sids.add(sid);
                     topics.put(topic, sids);
                 }
+                partake = true;
+                topicNum++;
+
+                sendSubscribe();
+                sendToIndex(new ReturnData("topicsNum", topics.size()));
+                sendAverage();
+                sendActualConnect();
+                sendtopics();
+
                 return "订阅成功:" + topic;
             } catch (MqttException e) {
                 e.printStackTrace();
@@ -199,6 +247,16 @@ public class WebSocketServer {
                     mqttClient.unsubscribe(topic);
                     topics.get(topic).remove(sid);
                 }
+                topicNum--;
+                if(0 == topicNum){
+                    partake = false;
+                }
+                sendSubscribe();
+                sendToIndex(new ReturnData("topicsNum", topics.size()));
+                sendAverage();
+                sendActualConnect();
+                sendtopics();
+
                 return "取消订阅成功:" + topic;
             } catch (MqttException e) {
                 e.printStackTrace();
@@ -226,6 +284,8 @@ public class WebSocketServer {
                     publish = topic.publish(mqttMessage);
                     publish.waitForCompletion();
                     if(publish.isComplete()) {
+                        sendToIndex(new ReturnData("publishNum", topics.get(pubTopic).size()));
+                        sendToIndex(new ReturnData("message", pubTopic + "-" + message));
                         return "消息发布成功!";
                     }
                 } catch (MqttException e) {
@@ -276,10 +336,113 @@ public class WebSocketServer {
         for (String sid : topics.get(topic)) {
             for (WebSocketServer webSocketServer : webSocketSet){
                 if(sid.equals(webSocketServer.sid)){
-                    webSocketServer.sendMessage("接收主题" + topic + "消息：" + message);
+                    webSocketServer.sendMessage("接收主题（" + topic + "）消息：" + message);
                     log.info("Mass messaging. the message({}) has sended to sid:{}.", message, webSocketServer.sid);
                 }
             }
         }
+    }
+
+    /**
+     * 指定发送数据至zhp客户端
+     */
+    public static void sendToIndex(ReturnData returnData){
+        for(WebSocketServer webSocketServer : webSocketSet) {
+            if ("zhp".equals(webSocketServer.sid))  {
+                try {
+                    webSocketServer.session.getBasicRemote().sendObject(returnData);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (EncodeException e) {
+                    e.printStackTrace();
+                }
+                log.info("send message{} to zhp", returnData);
+            }
+        }
+    }
+
+    /**
+     * 删除主题中连接
+     */
+    private void cleanTopics(String sid) {
+        for(Map.Entry<String, CopyOnWriteArraySet<String>> entry : topics.entrySet()){
+            CopyOnWriteArraySet<String> arraySet = entry.getValue();
+            if(arraySet.contains(sid)){
+                arraySet.remove(sid);
+            }
+        }
+    }
+
+    /**
+     * 发布平均订阅量
+     */
+    private void sendAverage() {
+        int websocketSize = webSocketSet.size() - 1;
+        if(websocketSize == 1 && this.sid.equals("zhp")){
+            sendToIndex(new ReturnData("averageSubscribeNum", 0));
+        }else{
+            if(websocketSize == 0){
+                sendToIndex(new ReturnData("averageSubscribeNum", 0));
+            }else{
+                sendToIndex(new ReturnData("averageSubscribeNum", topics.size()/websocketSize));
+            }
+        }
+    }
+
+    /**
+     * 发布有效连接
+     */
+    private void sendActualConnect() {
+        int websocketSize = webSocketSet.size() - 1;
+        double ActualNum = 0.00;
+        for(WebSocketServer webSocketServer : webSocketSet){
+            if(webSocketServer.partake){
+               ActualNum++;
+            }
+        }
+        if(ActualNum == 0){
+            sendToIndex(new ReturnData("actualConnectNum", 0));
+        }else{
+            sendToIndex(new ReturnData("actualConnectNum", String.format("%.2f", ActualNum/websocketSize)));
+        }
+    }
+
+    /**
+     * 发布主题图谱
+     */
+    private void sendtopics() {
+        LinkedList<HashMap<String, String>> topicsList = new LinkedList<>();
+        for(Map.Entry<String, CopyOnWriteArraySet<String>> entry : topics.entrySet()){
+            HashMap<String, String> topicsmap = new HashMap<>();
+            topicsmap.put("name", entry.getKey());
+            topicsmap.put("value", String.valueOf(entry.getValue().size()));
+            topicsList.add(topicsmap);
+        }
+        sendToIndex(new ReturnData("topics", JSON.toJSONString(topicsList)));
+    }
+
+    /**
+     * 发布客户端订阅主题量
+     */
+    private void sendSubscribe() {
+        LinkedList<Integer> list = new LinkedList<>();
+        for(WebSocketServer webSocketServer : webSocketSet){
+            if(!webSocketServer.sid.equals("zhp")){
+                list.add(webSocketServer.topicNum);
+            }
+        }
+        sendToIndex(new ReturnData("subscribeData", JSON.toJSONString(list)));
+    }
+
+    /**
+     * 初始化页面数据
+     */
+    private void initIndex() {
+        sendToIndex(new ReturnData("websocketNum", webSocketSet.size() - 1));
+        sendToIndex(new ReturnData("topicsNum", topics.size()));
+        sendAverage();
+        sendActualConnect();
+        sendtopics();
+        sendSubscribe();
     }
 }

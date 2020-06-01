@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>实时iot数据展示系统</title>
+    <script src="../js/jquery.js"></script>
+    <script type="text/javascript" src="../js/jquery.js"></script>
+    <script type="text/javascript" src="../js/echarts.min.js"></script>
+    <script type="text/javascript" src="../js/echarts-liquidfill.min.js"></script>
+    <link rel="stylesheet" href="../css/mystyle.css">
+    <script>
+        var socket;
+        var value;
+        var newvalue;
+        var data1;
+        var data2;
+        var datas;
+        var subdata = [];
+
+        var yMax = 50;
+        if(typeof(WebSocket) == "undefined") {
+            console.log("Your browser not support WebSocket!");
+        }else {
+            console.log("Your browser support WebSocket");
+            // 实例化WebSocket对象
+            // 指定要连接的服务器地址与端口
+            // 建立连接
+            socket = new WebSocket("ws://localhost:8080/websocket/zhp");
+            // 打开事件
+            socket.onopen = function () {
+                console.log("You has connect to WebSocketServer");
+            };
+            // 获得消息事件
+            socket.onmessage = function (msg) {
+                // 打印接收到的消息
+                console.log(msg);
+                var msg = JSON.parse(msg.data);
+
+                if(msg.id == "websocketNum"){
+                    yAxisData1.push(msg.data);
+                    $("#websocketNum").html(msg.data);
+                }else if(msg.id == "publishNum"){
+                    yAxisData2.push(msg.data);
+                }else if(msg.id == "averageSubscribeNum"){
+                    option1 = {
+                        series: [{
+                            type: 'pie',
+                            radius: ['70%', '80%'],
+                            color: {
+                                type: 'linear',
+                                x: 0,
+                                y: 0,
+                                x2: 0,
+                                y2: 1,
+                                colorStops: [{
+                                    offset: 0,
+                                    color: 'rgba(255, 215, 0, 0)'
+                                }, {
+                                    offset: 0.5,
+                                    color: 'rgba(255, 215, 0, .25)'
+                                }, {
+                                    offset: 1,
+                                    color: 'rgba(255, 215, 0, 1)'
+                                }],
+                                globalCoord: false
+                            },
+                            label: {
+                                normal: {
+                                    position: 'center'
+                                }
+                            },
+                            data: [{
+                                value: 250,
+                                name: '平均发布量',
+                                label: {
+                                    normal: {
+                                        formatter: msg.data + '',
+                                        textStyle: {
+                                            fontSize: 20,
+                                            color: '#fff',
+                                        }
+                                    }
+                                }
+                            }, ]
+                        }]
+                    };
+                    myChart1.setOption(option1);
+                }else if(msg.id == "actualConnectNum"){
+                    value = msg.data;
+                    data1 = [value, value, value, ];
+                    newvalue  = 1 - value;
+                    data2 = [newvalue, newvalue, newvalue, ];
+                    option2 = {
+                        title: {
+                            text: (value * 100).toFixed(0) + '{a|%}',
+                            textStyle: {
+                                fontSize: 20,
+                                fontFamily: 'Microsoft Yahei',
+                                fontWeight: 'normal',
+                                color: '#bcb8fb',
+                                rich: {
+                                    a: {
+                                        fontSize: 18,
+                                    }
+                                }
+                            },
+                            x: 'center',
+                            y: '42%'
+                        },
+                        graphic: [{
+                            type: 'group',
+                            left: 'center',
+                            top: '60%',
+                            children: [{
+                                type: 'text',
+                                z: 100,
+                                left: '10',
+                                top: 'middle',
+                                style: {
+                                    fill: '#aab2fa',
+                                    font: '10px Microsoft YaHei'
+                                }
+                            }]
+                        }],
+                        series: [{
+                            type: 'liquidFill',
+                            radius: '80%',
+                            center: ['50%', '50%'],
+                            //  shape: 'roundRect',
+                            data: data1,
+                            backgroundStyle: {
+                                color: {
+                                    type: 'linear',
+                                    x: 1,
+                                    y: 0,
+                                    x2: 0.5,
+                                    y2: 1,
+                                    colorStops: [{
+                                        offset: 1,
+                                        color: 'rgba(68, 145, 253, 0)'
+                                    }, {
+                                        offset: 0.5,
+                                        color: 'rgba(68, 145, 253, .25)'
+                                    }, {
+                                        offset: 0,
+                                        color: 'rgba(68, 145, 253, 1)'
+                                    }],
+                                    globalCoord: false
+                                },
+                            },
+                            outline: {
+                                borderDistance: 0,
+                                itemStyle: {
+                                    borderWidth: 8,
+                                    borderColor: {
+                                        type: 'linear',
+                                        x: 0,
+                                        y: 0,
+                                        x2: 0,
+                                        y2: 1,
+                                        colorStops: [{
+                                            offset: 0,
+                                            color: 'rgba(69, 73, 240, 0)'
+                                        }, {
+                                            offset: 0.5,
+                                            color: 'rgba(69, 73, 240, .25)'
+                                        }, {
+                                            offset: 1,
+                                            color: 'rgba(69, 73, 240, 1)'
+                                        }],
+                                        globalCoord: false
+                                    },
+                                    shadowBlur: 10,
+                                    shadowColor: '#000',
+                                }
+                            },
+                            label: {
+                                normal: {
+                                    formatter: '',
+                                }
+                            }
+                        }, ]
+                    };
+
+                    option3 = {
+                        title: {
+                            text: (newvalue * 100).toFixed(0) + '{a|%}',
+                            textStyle: {
+                                fontSize: 20,
+                                fontFamily: 'Microsoft Yahei',
+                                fontWeight: 'normal',
+                                color: '#bcb8fb',
+                                rich: {
+                                    a: {
+                                        fontSize: 18,
+                                    }
+                                }
+                            },
+                            x: 'center',
+                            y: '42%'
+                        },
+                        graphic: [{
+                            type: 'group',
+                            left: 'center',
+                            top: '60%',
+                            children: [{
+                                type: 'text',
+                                z: 100,
+                                left: '10',
+                                top: 'middle',
+                                style: {
+                                    fill: '#aab2fa',
+                                    font: '10px Microsoft YaHei'
+                                }
+                            }]
+                        }],
+                        series: [{
+                            type: 'liquidFill',
+                            radius: '80%',
+                            center: ['50%', '50%'],
+                            //  shape: 'roundRect',
+                            data: data2,
+                            backgroundStyle: {
+                                color: {
+                                    type: 'linear',
+                                    x: 1,
+                                    y: 0,
+                                    x2: 0.5,
+                                    y2: 1,
+                                    colorStops: [{
+                                        offset: 1,
+                                        color: 'rgba(68, 145, 253, 0)'
+                                    }, {
+                                        offset: 0.5,
+                                        color: 'rgba(68, 145, 253, .25)'
+                                    }, {
+                                        offset: 0,
+                                        color: 'rgba(68, 145, 253, 1)'
+                                    }],
+                                    globalCoord: false
+                                },
+                            },
+                            outline: {
+                                borderDistance: 0,
+                                itemStyle: {
+                                    borderWidth: 8,
+                                    borderColor: {
+                                        type: 'linear',
+                                        x: 0,
+                                        y: 0,
+                                        x2: 0,
+                                        y2: 1,
+                                        colorStops: [{
+                                            offset: 0,
+                                            color: 'rgba(69, 240, 73, 0)'
+                                        }, {
+                                            offset: 0.5,
+                                            color: 'rgba(69, 240, 73, .25)'
+                                        }, {
+                                            offset: 1,
+                                            color: 'rgba(69, 240, 73, 1)'
+                                        }],
+                                        globalCoord: false
+                                    },
+                                    shadowBlur: 10,
+                                    shadowColor: '#000',
+                                }
+                            },
+                            label: {
+                                normal: {
+                                    formatter: '',
+                                }
+                            }
+                        }, ]
+                    };
+                    myChart2.setOption(option2);
+                    myChart3.setOption(option3);
+                }else if(msg.id == "topics"){
+                    datas = getDatas(JSON.parse(msg.data));
+                    console.log(datas);
+                    option4 = {
+                        grid: {
+                            show: false,
+                            top: 10,
+                            bottom: 10
+                        },
+                        xAxis: [{
+                            gridIndex: 0,
+                            type: 'value',
+                            show: false,
+                            min: 0,
+                            max: 100,
+                            nameLocation: 'middle',
+                            nameGap: 5
+                        }],
+                        yAxis: [{
+                            gridIndex: 0,
+                            min: 0,
+                            show: false,
+                            max: 100,
+                            nameLocation: 'middle',
+                            nameGap: 30
+                        }],
+                        series: [{
+                            type: 'scatter',
+                            symbol: 'circle',
+                            symbolSize: 120,
+                            label: {
+                                normal: {
+                                    show: true,
+                                    formatter: '{b}',
+                                    color: '#FFF',
+                                    textStyle: {
+                                        fontSize: '30'
+                                    }
+                                },
+                            },
+                            itemStyle: {
+                                normal: {
+                                    color: '#F30'
+                                }
+                            },
+                            data: datas
+                        }]
+                    };
+
+                    myChart4.setOption(option4);
+                }else if(msg.id == "topicsNum"){
+                    $("#topicNum").html(msg.data);
+                }else if(msg.id == "subscribeData"){
+                    subdata = JSON.parse(msg.data);
+                    console.log(subdata);
+                    var dataAxis = [];
+                    var dataShadow = [];
+                    for (var i = 0; i < subdata.length; i++) {
+                        dataShadow.push(yMax);
+                        dataAxis.push("");
+                    }
+                    option5 = {
+                        tooltip: {},
+                        grid: {
+                            top: 15,
+                            right: 10,
+                            bottom: 10
+                        },
+                        xAxis: {
+                            data: dataAxis,
+                            axisTick: {
+                                show: false
+                            },
+                            axisLine: {
+                                show: false
+                            },
+                        },
+                        yAxis: {
+                            axisLine: {
+                                show: false
+                            },
+                            axisTick: {
+                                show: false
+                            },
+                            axisLabel: {
+                                textStyle: {
+                                    color: '#999'
+                                }
+                            }
+                        },
+                        dataZoom: [{
+                            type: 'inside'
+                        }],
+                        series: [{ // For shadow
+                            type: 'bar',
+                            itemStyle: {
+                                color: 'rgba(0,0,0,0.05)'
+                            },
+                            barGap: '-100%',
+                            barCategoryGap: '40%',
+                            data: dataShadow,
+                            animation: false
+                        },
+                            {
+                                type: 'bar',
+                                itemStyle: {
+                                    color: new echarts.graphic.LinearGradient(
+                                        0, 0, 0, 1, [
+                                            { offset: 0, color: '#83bff6' },
+                                            { offset: 0.5, color: '#188df0' },
+                                            { offset: 1, color: '#188df0' }
+                                        ]
+                                    )
+                                },
+                                emphasis: {
+                                    itemStyle: {
+                                        color: new echarts.graphic.LinearGradient(
+                                            0, 0, 0, 1, [
+                                                { offset: 0, color: '#2378f7' },
+                                                { offset: 0.7, color: '#2378f7' },
+                                                { offset: 1, color: '#83bff6' }
+                                            ]
+                                        )
+                                    }
+                                },
+                                data: subdata
+                            }
+                        ]
+                    };
+                    myChart5.setOption(option5);
+                }else if(msg.id ==  "message"){
+                    addMessage(msg.data);
+                }
+            };
+            // 关闭事件
+            socket.onclose = function () {
+                console.log("Socket has closed");
+            };
+            // 发生了错误事件
+            socket.onerror = function () {
+                alert("Socket happens an error!");
+            }
+            //监听窗口关闭事件，当窗口关闭时，主动去关闭websocket连接，防止连接还没断开就关闭窗口，server端会抛异常。
+            window.onbeforeunload = function () {
+                websocket.close();
+            }
+        }
+
+        //消息轮询
+        function addMessage(message) {
+            var html = "<li><img class='message' src='../images/topic.png' height='28px'><p>" + message + "</p></li>";
+            var old = $(".wrap div").html();
+            if (old == "暂无消息！") {
+                $(".wrap").html(html);
+            } else {
+                $(".wrap").html(html + $(".wrap").html());
+            }
+        }
+    </script>
+</head>
+<body>
+<div class="loading">
+    <div class="loadbox"><img src="../images/loading.gif"> loading... </div>
+</div>
+<div class="head">
+    <h1 id="title">实时IoT数据展示平台</h1>
+    <div id="datetime"></div>
+</div>
+<div class="mainbox">
+    <ul class="clearfix">
+        <li>
+            <div class="boxall" style="height: 2.7rem">
+                <div class="alltitle">流量展示</div>
+
+                <div class="sycm">
+                    <div class="showFlow" id="actualConnect"></div>
+                    <div style="border-bottom: 1px solid rgba(255,255,255,.1)"></div>
+                    <div class="showFlow" id="actualPublish"></div>
+                </div>
+                <div class="boxfoot"></div>
+            </div>
+            <div class="boxall" style="height: 2.65rem">
+                <div class="alltitle">发布占比</div>
+                <div class="sy" id="echarts1"></div>
+                <div class="sy" id="echarts2"></div>
+                <div class="sy" id="echarts3"></div>
+                <div class="boxfoot"></div>
+            </div>
+            <div class="boxall" style="height: 2.95rem">
+                <div class="alltitle">主题图谱</div>
+                <div id="echarts4" style="height: 2.2rem; width: 100%;"></div>
+                <div class="boxfoot"></div>
+            </div>
+        </li>
+        <li>
+            <div class="bar">
+                <div class="barbox">
+                    <ul class="clearfix">
+                        <li class="pulll_left counter" id="websocketNum">0</li>
+                        <li class="pulll_left counter" id="topicNum">0</li>
+                    </ul>
+                </div>
+                <div class="barbox2">
+                    <ul class="clearfix">
+                        <li class="pulll_left">连接总数</li>
+                        <li class="pulll_left">主题总数</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="map">
+                <div class="map1"><img src="../images/lbx.png"></div>
+                <div class="map2"><img src="../images/jt.png"></div>
+                <div class="map3"><img src="../images/map.png"></div>
+                <div class="map4" id="map_1"></div>
+            </div>
+        </li>
+        <li>
+            <div class="boxall" style="height:5.2rem">
+                <div class="alltitle">客户端订阅主题量</div>
+                <div class="tabs" id="websocketTopics"></div>
+                <div class="boxfoot"></div>
+            </div>
+            <div class="boxall" style="height: 3.4rem">
+                <div class="alltitle">实时消息记录</div>
+                <div class="wrap">
+                    <div id="nomessage">暂无消息！</div>
+                </div>
+                <div class="boxfoot"></div>
+            </div>
+        </li>
+    </ul>
+</div>
+<div class="back"></div>
+<script language="JavaScript" src="../js/myJavaScript.js"></script>
+</body>
+</html>
