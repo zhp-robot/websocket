@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>欢迎使用MQTT</title>
+    <script src="../js/jquery.js"></script>
+    <script>
+        var socket;
+        if (typeof(WebSocket) == "undefined") {
+            console.log("Your browser not support WebSocket!");
+        } else {
+            console.log("Your browser support WebSocket");
+            // 实例化WebSocket对象
+            // 指定要连接的服务器地址与端口
+            // 建立连接
+            socket = new WebSocket("ws://127.0.0.1:8080/websocket/mqtt", "mqtt");
+            // 打开事件
+            socket.onopen = function() {
+                console.log("You has connect to WebSocketServer");
+            };
+            // 获得消息事件
+            socket.onmessage = function(msg) {
+                // 打印接收到的消息
+                console.log(msg);
+                var data = "<pre>" + msg.data + "</pre>";
+                $("#logger").html($("#logger").html() + data);
+            };
+            // 关闭事件
+            socket.onclose = function() {
+                console.log("Socket has closed");
+            };
+            // 发生了错误事件
+            socket.onerror = function() {
+                    alert("Socket happens an error!");
+                }
+                //监听窗口关闭事件，当窗口关闭时，主动去关闭websocket连接，防止连接还没断开就关闭窗口，server端会抛异常。
+            window.onbeforeunload = function() {
+                websocket.close();
+            }
+
+            function subscribe() {
+                var topic = $("#topic").val();
+                if (null == topic || "" == topic) {
+                    $("#topicError").html("请输入您要订阅的主题！");
+                } else {
+                    socket.send("subscribe|" + topic);
+                    cleanup();
+                }
+            }
+
+            function unsubscribe() {
+                var topic = $("#topic").val();
+                if (null == topic || "" == topic) {
+                    $("#topicError").html("请输入您要取消订阅的主题！");
+                } else {
+                    socket.send("unsubscribe|" + topic);
+                    cleanup();
+                }
+            }
+
+            function publishMessage() {
+                var publishtopic = $("#publishtopic").val();
+                var message = $("#message").val();
+                if (null == publishtopic || "" == publishtopic) {
+                    $("#messageError").html("请输入您要发布的主题！");
+                } else if (null == message || "" == message) {
+                    $("#messageError").html("请输入您要发布的消息内容！");
+                } else {
+                    socket.send("publish|" + publishtopic + "|" + message);
+                    cleanup();
+                }
+            }
+
+            function cleanup() {
+                $("#topic").val("");
+                $("#publishtopic").val("");
+                $("#message").val("");
+                $("#topicError").html("");
+                $("#messageError").html("");
+            }
+        }
+    </script>
+</head>
+
+<style>
+    body {
+        padding: 0;
+        margin: 0;
+        background-color: darkgrey;
+    }
+    
+    .header {
+        padding: 0;
+        margin: 0;
+        height: 80px;
+        background-color: chocolate;
+        text-align: center;
+        line-height: 80px;
+        font-size: 30px;
+        color: cornsilk;
+        font-style: oblique;
+        letter-spacing: 10px;
+    }
+    
+    .container {
+        margin-left: 10%;
+        float: left;
+        background-color: white;
+    }
+    
+    .logger {
+        width: 373px;
+        height: 506px;
+        margin-left: 20%;
+        float: left;
+        background-color: white;
+    }
+</style>
+
+<body>
+    <div class="header">
+        欢迎使用MQTT！
+    </div>
+    <div class="container">
+        <input type="text" id="topic" placeholder="订阅/取订主题" />
+        <input type="button" value="订阅主题" onclick="subscribe()" />
+        <input type="button" value="取消订阅" onclick="unsubscribe()" />
+        <span id="topicError" style="color: red"></span>
+        <br>
+        <input type="text" id="publishtopic" placeholder="发布主题" />
+        <input type="button" value="发送消息" onclick="publishMessage()" />
+        <span id="messageError" style="color: red"></span>
+        <br>
+        <textarea cols="50" rows="30" id="message" placeholder="message..."></textarea>
+    </div>
+    <div class="logger">
+        <p id="logger">LOG</p>
+    </div>
+</body>
+
+</html>
